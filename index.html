@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>منصة المهام والربح بالعمولة - USDT</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel -->
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+        body { font-family: 'Cairo', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spin-animation { animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        function App() {
+            // حفظ الحساب لكي لا يضطر لتسجيل الدخول مرة أخرى
+            const [isLoggedIn, setIsLoggedIn] = React.useState(() => {
+                return localStorage.getItem('dz_logged_in') === 'true';
+            });
+            const [currentTab, setCurrentTab] = React.useState('dashboard');
+            const [authMode, setAuthMode] = React.useState('login');
+            
+            // بيانات المستخدم والأرصدة بالدولار ($) - الباقة المجانية: 2 مهمة، 1.5$ لكل مهمة
+            const [balance, setBalance] = React.useState(0);
+            const [currentPlan, setCurrentPlan] = React.useState({ name: 'المجاني (Free)', tasksPerDay: 2, rewardPerTask: 1.5 });
+            const [completedTasksToday, setCompletedTasksToday] = React.useState(0);
+
+            // نظام الإحالات التلقائي (النظام يتحقق منها تلقائياً)
+            const [referralCount, setReferralCount] = React.useState(() => {
+                return parseInt(localStorage.getItem('dz_ref_count') || '0');
+            });
+
+            // حالة دوران العجلة (المهمة لمدة 10 ثواني)
+            const [isSpinning, setIsSpinning] = React.useState(false);
+            const [timer, setTimer] = React.useState(10);
+
+            // إعدادات المستخدم
+            const [userName, setUserName] = React.useState('عزالدين');
+            const [userEmail, setUserEmail] = React.useState('zino@example.com');
+            const [userUsdtWallet, setUserUsdtWallet] = React.useState('0x21c828a06c314275bcfc7d3cb27cb1ebf2dc3e31');
+
+            // طلب الترقية والدفع
+            const [pendingUpgrade, setPendingUpgrade] = React.useState(null);
+            const [selectedPlanForUpgrade, setSelectedPlanForUpgrade] = React.useState(null);
+            const [paymentProofText, setPaymentProofText] = React.useState('');
+
+            // طلب السحب
+            const [withdrawAccount, setWithdrawAccount] = React.useState('');
+            const [withdrawAmount, setWithdrawAmount] = React.useState('');
+
+            // التحقق التلقائي للبرنامج من الإحالات عند فتح الرابط
+            React.useEffect(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const refCode = urlParams.get('ref');
+                if (refCode) {
+                    let currentRefs = parseInt(localStorage.getItem('dz_ref_count') || '0') + 1;
+                    localStorage.setItem('dz_ref_count', currentRefs);
+                    setReferralCount(currentRefs);
+                    // إذا وصل إلى 20 إحالة، النظام يفعل الباقة الأولى مجاناً تلقائياً
+                    if (currentRefs >= 20 && currentPlan.name === 'المجاني (Free)') {
+                        setCurrentPlan({ name: 'برونزي (7$ - ربح 14$)', tasksPerDay: 5, rewardPerTask: 2.8 });
+                    }
+                }
+            }, []);
+
+            const handleAuth = (e) => {
+                e.preventDefault();
+                setIsLoggedIn(true);
+                localStorage.setItem('dz_logged_in', 'true');
+            };
+
+            const handleLogout = () => {
+                setIsLoggedIn(false);
+                localStorage.removeItem('dz_logged_in');
+            };
+
+            // مهمة عجلة الحظ لمدة 10 ثواني
+            const startTaskWheel = () => {
+                if (completedTasksToday >= currentPlan.tasksPerDay) {
+                    alert("لقد أكملت جميع مهامك اليومية لهذا الباقة!");
+                    return;
+                }
+                setIsSpinning(true);
+                setTimer(10);
+
+                const interval = setInterval(() => {
+                    setTimer((prev) => {
+                        if (prev <= 1) {
+                            clearInterval(interval);
+                            setIsSpinning(false);
+                            setBalance(b => Number((b + currentPlan.rewardPerTask).toFixed(2)));
+                            setCompletedTasksToday(c => c + 1);
+                            alert(`تهانينا! اكتملت المهمة بنجاح وتم إضافة $${currentPlan.rewardPerTask} إلى رصيدك.`);
+                            return 0;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+            };
+
+            const submitUpgradeRequest = (e) => {
+                e.preventDefault();
+                if (!paymentProofText) {
+                    alert("الرجاء إدخال رقم المعاملة أو وصل الدفع!");
+                    return;
+                }
+                setPendingUpgrade(selectedPlanForUpgrade.name);
+                alert(`تم إرسال طلب ترقية إلى باقة ${selectedPlanForUpgrade.name} بنجاح. الطلب قيد المراجعة حتى تؤكده الإدارة.`);
+                setSelectedPlanForUpgrade(null);
+                setPaymentProofText('');
+            };
+
+            const handleWithdraw = (e) => {
+                e.preventDefault();
+                const amount = parseFloat(withdrawAmount);
+                if (amount < 20) {
+                    alert("عذراً، الحد الأدنى للسحب هو 20 دولار!");
+                    return;
+                }
+                if (amount > balance) {
+                    alert("الرصيد غير كافٍ لإتمام عملية السحب!");
+                    return;
+                }
+                setBalance(prev => Number((prev - amount).toFixed(2)));
+                alert(`تم إرسال طلب سحب مبلغ $${amount} بنجاح عبر محفظة USDT (BEP20) إلى الحساب: ${withdrawAccount}`);
+                setWithdrawAmount('');
+                setWithdrawAccount('');
+            };
+
+            if (!isLoggedIn) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-4 bg-[#0b1329]">
+                        <div className="bg-[#131c38] border border-[#1e294b] p-8 rounded-3xl w-full max-w-md shadow-2xl space-y-6">
+                            <div className="text-center">
+                                <div className="text-emerald-400 text-3xl font-black mb-2"><i className="fa-solid fa-circle-nodes"></i> DZ-TaskPro</div>
+                                <p className="text-slate-400 text-sm">منصة المهام الذكية والربح بالعمولة - USDT</p>
+                            </div>
+
+                            <form onSubmit={handleAuth} className="space-y-4">
+                                {authMode === 'register' && (
+                                    <div>
+                                        <label className="block text-sm font-semibold mb-1 text-slate-300">الاسم الكامل</label>
+                                        <input type="text" required value={userName} onChange={(e)=>setUserName(e.target.value)} className="w-full bg-[#0b1329] border border-[#1e294b] p-3 rounded-xl text-white focus:border-emerald-500 focus:outline-none" placeholder="الاسم واللقب" />
+                                    </div>
+                                )}
+                                <div>
+                                    <label className="block text-sm font-semibold mb-1 text-slate-300">البريد الإلكتروني</label>
+                                    <input type="email" required value={userEmail} onChange={(e)=>setUserEmail(e.target.value)} className="w-full bg-[#0b1329] border border-[#1e294b] p-3 rounded-xl text-white focus:border-emerald-500 focus:outline-none" placeholder="name@example.com" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold mb-1 text-slate-300">كلمة المرور</label>
+                                    <input type="password" required className="w-full bg-[#0b1329] border border-[#1e294b] p-3 rounded-xl text-white focus:border-emerald-500 focus:outline-none" placeholder="••••••••" />
+                                </div>
+                                <button type="submit" className="w-full bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold p-3 rounded-xl transition shadow-lg">
+                                    {authMode === 'login' ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}
+                                </button>
+                            </form>
+
+                            <div className="text-center text-sm text-slate-400">
+                                {authMode === 'login' ? (
+                                    <p>ليس لديك حساب؟ <button onClick={()=>setAuthMode('register')} className="text-emerald-400 font-bold hover:underline">سجل الآن مجاناً</button></p>
+                                ) : (
+                                    <p>لديك حساب بالفعل؟ <button onClick={()=>setAuthMode('login')} className="text-emerald-400 font-bold hover:underline">تسجيل الدخول</button></p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen flex flex-col bg-[#0b1329]">
+                    <header className="bg-[#131c38]/90 border-b border-[#1e294b] sticky top-0 z-50 backdrop-blur">
+                        <div className="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+                            <div className="text-xl font-black text-emerald-400 flex items-center gap-2">
+                                <i className="fa-solid fa-circle-nodes"></i> DZ-TaskPro
+                            </div>
+                            <nav className="flex gap-2 items-center overflow-x-auto py-1">
+                                <button onClick={()=>setCurrentTab('dashboard')} className={`px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition ${currentTab==='dashboard'?'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30':'bg-[#1b274a] text-slate-300 hover:bg-[#23335c]'}`}>المهام</button>
+                                <button onClick={()=>setCurrentTab('plans')} className={`px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition ${currentTab==='plans'?'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30':'bg-[#1b274a] text-slate-300 hover:bg-[#23335c]'}`}>الاشتراكات</button>
+                                <button onClick={()=>setCurrentTab('referrals')} className={`px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition ${currentTab==='referrals'?'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30':'bg-[#1b274a] text-slate-300 hover:bg-[#23335c]'}`}>الإحالات التلقائية</button>
+                                <button onClick={()=>setCurrentTab('withdraw')} className={`px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition ${currentTab==='withdraw'?'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30':'bg-[#1b274a] text-slate-300 hover:bg-[#23335c]'}`}>السحب</button>
+                                <button onClick={()=>setCurrentTab('settings')} className={`px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap transition ${currentTab==='settings'?'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30':'bg-[#1b274a] text-slate-300 hover:bg-[#23335c]'}`}><i className="fa-solid fa-gear"></i></button>
+                                <button onClick={handleLogout} className="px-3 py-2 rounded-xl bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 font-bold text-sm transition ml-2"><i className="fa-solid fa-right-from-bracket"></i></button>
+                            </nav>
+                        </div>
+                    </header>
+
+                    <main className="max-w-7xl mx-auto p-4 md:p-6 flex-1 w-full space-y-6">
+                        
+                        {/* لوحة التحكم والمهام (العجلة الدوارة) */}
+                        {currentTab === 'dashboard' && (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-[#131c38] border border-[#1e294b] p-6 rounded-2xl shadow-sm">
+                                        <div className="text-slate-400 text-sm">الرصيد الحالي</div>
+                                        <div className="text-3xl font-black text-emerald-400 mt-2">${balance}</div>
+                                    </div>
+                                    <div className="bg-[#131c38] border border-[#1e294b] p-6 rounded-2xl shadow-sm">
+                                        <div className="text-slate-400 text-sm">الباقة الحالية</div>
+                                        <div className="text-xl font-black text-amber-400 mt-2">
+                                            {currentPlan.name}
+                                            {pendingUpgrade && <span className="block text-xs text-amber-500/80 mt-1">(طلب ترقيتك قيد المراجعة)</span>}
+                                        </div>
+                                    </div>
+                                    <div className="bg-[#131c38] border border-[#1e294b] p-6 rounded-2xl shadow-sm">
+                                        <div className="text-slate-400 text-sm">المهام المنجزة اليوم</div>
+                                        <div className="text-2xl font-black text-slate-200 mt-2">{completedTasksToday} / {currentPlan.tasksPerDay}</div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-[#131c38] border border-[#1e294b] p-8 rounded-2xl space-y-6 text-center">
+                                    <h2 className="text-xl font-bold text-slate-200">مهمة تدوير العجلة (تستغرق 10 ثواني)</h2>
+                                    <p className="text-slate-400 text-sm">ابدأ المهمة، وانتظر حتى تنتهي الـ 10 ثواني لاحتساب أرباحك (${currentPlan.rewardPerTask} لكل مهمة):</p>
+                                    
+                                    <div className="flex flex-col items-center justify-center space-y-4 py-6">
+                                        <div className={`w-32 h-32 rounded-full border-4 border-emerald-500/30 border-t-emerald-500 flex items-center justify-center text-3xl font-black text-emerald-400 ${isSpinning ? 'spin-animation bg-emerald-500/10' : 'bg-[#0b1329]'}`}>
+                                            {isSpinning ? `${timer}s` : <i className="fa-solid fa-dharmachakra"></i>}
+                                        </div>
+
+                                        <button 
+                                            disabled={isSpinning}
+                                            onClick={startTaskWheel} 
+                                            className={`px-8 py-3 rounded-xl font-bold transition shadow-lg ${isSpinning ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-emerald-600/80 hover:bg-emerald-600 text-white'}`}>
+                                            {isSpinning ? 'جاري إنجاز المهمة...' : 'ابدأ تدوير العجلة الآن'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* صفحة ترقية الاشتراكات */}
+                        {currentTab === 'plans' && (
+                            <div className="space-y-6">
+                                <div className="text-center max-w-xl mx-auto space-y-2">
+                                    <h2 className="text-2xl font-black text-slate-100">ترقية الباقات والاشتراكات</h2>
+                                    <p className="text-slate-400 text-sm">اختر باقتك وقم بالدفع عبر محفظة USDT (شبكة BEP20):</p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="bg-[#131c38] border border-[#1e294b] p-6 rounded-2xl space-y-4 flex flex-col justify-between">
+                                        <div>
+                                            <span className="bg-emerald-500/10 text-emerald-400 text-xs px-3 py-1 rounded-full font-bold">باقة المبتدئين</span>
+                                            <h3 className="text-2xl font-black mt-3 text-slate-100">برونزي (Bronze)</h3>
+                                            <p className="text-slate-400 text-sm mt-2">5 مهام يومياً • إجمالي الربح 14$</p>
+                                            <div className="mt-4 text-emerald-400 font-bold">السعر: 7$ USDT</div>
+                                        </div>
+                                        <button onClick={()=>setSelectedPlanForUpgrade({name: 'برونزي (7$)', tasks: 5, reward: 2.8, priceUSDT: '7 USDT'})} className="w-full bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold p-3 rounded-xl transition">ترقية الباقة (7$)</button>
+                                    </div>
+
+                                    <div className="bg-[#131c38] border border-[#1e294b] p-6 rounded-2xl space-y-4 flex flex-col justify-between border-emerald-500/30 shadow-lg">
+                                        <div>
+                                            <span className="bg-sky-500/10 text-sky-400 text-xs px-3 py-1 rounded-full font-bold">الأكثر طلباً</span>
+                                            <h3 className="text-2xl font-black mt-3 text-slate-100">سيلفر (Silver)</h3>
+                                            <p className="text-slate-400 text-sm mt-2">12 مهمة يومياً</p>
+                                            <div className="mt-4 text-sky-400 font-bold">السعر: 15$ USDT</div>
+                                        </div>
+                                        <button onClick={()=>setSelectedPlanForUpgrade({name: 'سيلفر (15$)', tasks: 12, reward: 2.5, priceUSDT: '15 USDT'})} className="w-full bg-sky-600/80 hover:bg-sky-600 text-white font-bold p-3 rounded-xl transition">ترقية الباقة (15$)</button>
+                                    </div>
+
+                                    <div className="bg-[#131c38] border border-[#1e294b] p-6 rounded-2xl space-y-4 flex flex-col justify-between">
+                                        <div>
+                                            <span className="bg-amber-500/10 text-amber-400 text-xs px-3 py-1 rounded-full font-bold">باقة المحترفين</span>
+                                            <h3 className="text-2xl font-black mt-3 text-slate-100">غولد (Gold)</h3>
+                                            <p className="text-slate-400 text-sm mt-2">25 مهمة يومياً</p>
+                                            <div className="mt-4 text-amber-400 font-bold">السعر: 30$ USDT</div>
+                                        </div>
+                                        <button onClick={()=>setSelectedPlanForUpgrade({name: 'غولد (30$)', tasks: 25, reward: 2.4, priceUSDT: '30 USDT'})} className="w-full bg-amber-600/80 hover:bg-amber-600 text-white font-bold p-3 rounded-xl transition">ترقية الباقة (30$)</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* صفحة الإحالات التلقائية */}
+                        {currentTab === 'referrals' && (
+                            <div className="space-y-6">
+                                <div className="bg-[#131c38] border border-[#1e294b] p-8 rounded-2xl space-y-6">
+                                    <h2 className="text-2xl font-black text-emerald-400">نظام الإحالات التلقائي</h2>
+                                    <p className="text-slate-300 text-sm">البرنامج يتحقق من الإحالات تلقائياً بمجرد دخول الشخص عبر رابطك. <b>عند وصولك إلى 20 إحالة، تحصل على الباقة الأولى مجاناً!</b></p>
+                                    
+                                    <div className="bg-[#0b1329] p-4 rounded-xl border border-[#1e294b] space-y-3">
+                                        <label className="text-sm font-semibold text-slate-300">رابط الإحالة الخاص بك:</label>
+                                        <div className="flex gap-2">
+                                            <input type="text" readOnly value={`${window.location.origin}?ref=zino_${userName}`} className="w-full bg-[#131c38] border border-[#1e294b] p-3 rounded-xl text-emerald-300 font-mono text-sm" />
+                                            <button onClick={()=>alert("تم نسخ رابط الإحالة!")} className="bg-emerald-600/80 hover:bg-emerald-600 text-white px-5 py-3 rounded-xl font-bold text-sm">نسخ</button>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-[#0b1329] p-6 rounded-xl border border-[#1e294b]">
+                                        <div className="text-slate-400 text-sm">عدد الإحالات التلقائية المسجلة بواسطة النظام</div>
+                                        <div className="text-3xl font-black text-white mt-2">{referralCount} / 20 شخص</div>
+                                        <div className="w-full bg-[#1e294b] h-2.5 rounded-full mt-4 overflow-hidden">
+                                            <div className="bg-emerald-500 h-full transition-all duration-500" style={{width: `${Math.min((referralCount / 20) * 100, 100)}%`}}></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* صفحة إعدادات الحساب */}
+                        {currentTab === 'settings' && (
+                            <div className="bg-[#131c38] border border-[#1e294b] p-8 rounded-2xl max-w-xl mx-auto space-y-6">
+                                <h2 className="text-2xl font-bold text-slate-100"><i className="fa-solid fa-gear text-emerald-400"></i> إعدادات الحساب</h2>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold mb-1 text-slate-300">الاسم الكامل</label>
+                                        <input type="text" value={userName} onChange={(e)=>setUserName(e.target.value)} className="w-full bg-[#0b1329] border border-[#1e294b] p-3 rounded-xl text-white focus:border-emerald-500 focus:outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold mb-1 text-slate-300">البريد الإلكتروني</label>
+                                        <input type="email" value={userEmail} onChange={(e)=>setUserEmail(e.target.value)} className="w-full bg-[#0b1329] border border-[#1e294b] p-3 rounded-xl text-white focus:border-emerald-500 focus:outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold mb-1 text-slate-300">عنوان محفظة USDT لاستلام الأرباح (شبكة BEP20)</label>
+                                        <input type="text" value={userUsdtWallet} onChange={(e)=>setUserUsdtWallet(e.target.value)} className="w-full bg-[#0b1329] border border-[#1e294b] p-3 rounded-xl text-white focus:border-emerald-500 focus:outline-none font-mono text-sm" />
+                                    </div>
+                                    <button onClick={()=>alert("تم حفظ التعديلات بنجاح!")} className="w-full bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold p-3 rounded-xl transition shadow-lg">حفظ التغييرات</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* صفحة سحب الأرباح */}
+                        {currentTab === 'withdraw' && (
+                            <div className="bg-[#131c38] border border-[#1e294b] p-8 rounded-2xl max-w-xl mx-auto space-y-6">
+                                <div>
+                                    <h2 className="text-xl font-bold text-slate-100">طلب سحب الأرباح</h2>
+                                    <p className="text-slate-400 text-sm mt-1">الحد الأدنى للسحب هو <span className="text-emerald-400 font-bold">20 دولار ($)</span></p>
+                                </div>
+                                <form onSubmit={handleWithdraw} className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-semibold mb-1 text-slate-300">عنوان محفظة USDT (شبكة BEP20)</label>
+                                        <input type="text" required value={withdrawAccount} onChange={(e)=>setWithdrawAccount(e.target.value)} className="w-full bg-[#0b1329] border border-[#1e294b] p-3 rounded-xl text-white focus:border-emerald-500 focus:outline-none font-mono text-sm" placeholder="0x..." />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold mb-1 text-slate-300">المبلغ المراد سحبه ($)</label>
+                                        <input type="number" step="0.01" required value={withdrawAmount} onChange={(e)=>setWithdrawAmount(e.target.value)} className="w-full bg-[#0b1329] border border-[#1e294b] p-3 rounded-xl text-white focus:border-emerald-500 focus:outline-none" placeholder="الحد الأدنى 20 دولار" />
+                                    </div>
+                                    <button type="submit" className="w-full bg-emerald-600/80 hover:bg-emerald-600 text-white font-bold p-3 rounded-xl transition shadow-lg">تأكيد طلب السحب</button>
+                                </form>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* نافذة الدفع لترقية الباقة عبر USDT (BEP20) */}
+                    {selectedPlanForUpgrade && (
+                        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto">
+                            <div className="bg-[#131c38] border border-[#1e294b] p-6 rounded-3xl max-w-md w-full space-y-4 my-8 shadow-2xl">
+                                <h3 className="text-xl font-bold text-emerald-400">إتمام دفع اشتراك: {selectedPlanForUpgrade.name}</h3>
+                                <p className="text-slate-300 text-sm">قيمة الاشتراك المطلوبة: <span className="text-emerald-400 font-bold">{selectedPlanForUpgrade.priceUSDT}</span></p>
+                                
+                                <div className="bg-[#0b1329] p-3 rounded-xl border border-[#1e294b] text-xs text-slate-400 space-y-2">
+                                    <p className="text-amber-400 font-bold">⚠️ تنبيه هامة: التحويل حصراً عبر شبكة BEP20 (BSC)</p>
+                                    <p className="mb-1">عنوان المحفظة الرسمي للإدارة:</p>
+                                    <div className="bg-[#131c38] p-2 rounded text-emerald-400 font-mono text-[11px] break-all select-all border border-[#1e294b]">
+                                        0x21c828a06c314275bcfc7d3cb27cb1ebf2dc3e31
+                                    </div>
+                                </div>
+
+                                <form onSubmit={submitUpgradeRequest} className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1 text-slate-300">أدخل رقم المعاملة (Transaction Hash)</label>
+                                        <input type="text" required value={paymentProofText} onChange={(e)=>setPaymentProofText(e.target.value)} placeholder="0x..." className="w-full bg-[#0b1329] border border-[#1e294b] p-3 rounded-xl text-white text-sm focus:border-emerald-500 focus:outline-none font-mono" />
+                                    </div>
+                                    <div className="flex gap-2 pt-2">
+                                        <button type="submit" className="flex-1 bg-emerald-600/80 hover:bg-emerald-600 text-white p-3 rounded-xl font-bold text-sm transition">إرسال الوصل للمراجعة</button>
+                                        <button type="button" onClick={()=>setSelectedPlanForUpgrade(null)} className="bg-slate-800 text-slate-300 px-4 py-3 rounded-xl font-bold text-sm">إلغاء</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
